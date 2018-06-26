@@ -1,5 +1,10 @@
 package betting
 
+import	(
+	"net/http"
+	"time"
+)
+
 // BetfairRestURL type of all betfair rest urls
 type BetfairRestURL string
 
@@ -17,9 +22,15 @@ type Betfair struct {
 }
 
 func NewBetfair(apikey string) *Betfair {
-
-	client := Client{ApiKey: apikey}
-
+	
+	tr:=http.Transport{MaxIdleConnsPerHost:100}
+	client := Client{ApiKey: apikey,
+					WebTransport:	&tr,
+					WebClient:		&http.Client{Transport: &tr,
+												Timeout: 10*time.Second,
+									},
+					}
+	
 	return &Betfair{
 		Client:  &client,
 		Betting: &Betting{&client},

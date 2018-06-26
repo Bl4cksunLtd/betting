@@ -5,13 +5,17 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"errors"
-
-	"github.com/valyala/fasthttp"
+	"time"
+	"io/ioutil"
+	"net/http"
+//	"github.com/valyala/fasthttp"
 )
 
 type Client struct {
-	ApiKey     string
-	SessionKey string
+	ApiKey     		string
+	SessionKey 		string
+	WebClient		*http.Client
+	WebTransport	*http.Transport
 }
 
 type Session struct {
@@ -19,6 +23,53 @@ type Session struct {
 	LoginStatus  ELoginStatus
 }
 
+func (c *Client) GetSession(pemCert, keyCert, login, password string) error {
+	var session *Session = &Session{}
+
+	cert, err := tls.LoadX509KeyPair(pemCert, keyCert)
+	if err != nil {
+		return err
+	}
+	tr := &http.Transport{
+		MaxIdleConns:       10,
+		IdleConnTimeout:    30 * time.Second,
+		TLSClientConfig: &tls.Config{Certificates: []tls.Certificate{cert}, InsecureSkipVerify: true},
+	}
+	client := &http.Client{Transport: tr}
+	bufferString := bytes.NewBuffer([]byte{})
+	bufferString.WriteString(`username=`)
+	bufferString.WriteString(login)
+	bufferString.WriteString(`&password=`)
+	bufferString.WriteString(password)
+
+	req, _ := http.NewRequest("POST",
+		CertURL,bufferString)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("X-Application", c.ApiKey)
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+
+	out, _ := ioutil.ReadAll(resp.Body)
+	resp.Body.Close()
+
+	err = json.Unmarshal(out, session)
+	if err != nil {
+		return err
+	}
+
+	switch session.LoginStatus {
+	case LS_SUCCESS:
+		c.SessionKey = session.SessionToken
+	default:
+		err = errors.New(string(session.LoginStatus))
+	}
+
+	return err
+}
+
+/*
 func (c *Client) GetSession(pemCert, keyCert, login, password string) error {
 	var session *Session = &Session{}
 
@@ -100,3 +151,4 @@ func (c *Client) KeepAlive() error {
 
 	return err
 }
+*/
